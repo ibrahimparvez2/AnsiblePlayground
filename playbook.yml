@@ -1,0 +1,50 @@
+- hosts: localhost
+  become: true  
+  vars:
+  - dockerfile_folder: "DockerSetup"
+  - docker_image_name: "ssh_os:1"
+  - docker_container_name: "test_os"
+  - patting_ssh_port: "2222"
+  - patting_http_port: "80"
+  - allow_world_readable_tmpfiles: true
+  tasks:
+  - name: "Copy Docker file"
+    copy:
+     src: "{{dockerfile_folder}}"
+     dest: "/srv/"
+
+  - name: "Build docker image from Dockerfile"
+    docker_image:
+       name:  "{{docker_image_name}}"
+       build:
+         pull: yes
+         path: "/srv/{{dockerfile_folder}}/"
+       state: present
+       source: build
+  
+  - name: "launch docker container"
+    docker_container:
+       name: "{{docker_container_name}}"
+       image: "{{docker_image_name}}"
+       state: started
+       ports:
+       - "{{patting_ssh_port}}:22"
+       -  "{{patting_http_port}}:8080"
+    register: docker_info
+  
+  - name: Get info of the container
+    docker_container_info:
+      name: "{{ docker_container_name }}" 
+    register: result
+
+  - name: Printing IP Address
+    debug:
+            msg: "{{ result.container.NetworkSettings.IPAddress }}"
+
+  - name: "Update inventory file"
+    lineinfile:
+      path: hosts
+      insertafter: '(?<![\w\d])containers(?![\w\d])'
+      line: "{{ result.container.NetworkSettings.IPAddress }}"
+      firstmatch: yes
+      state: present
